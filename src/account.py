@@ -452,35 +452,36 @@ class AccountWindow(QMainWindow):
             date_item = QTableWidgetItem(transaction.date.strftime("%Y-%m-%d"))
             self.transactions_table.setItem(row_position, 0, date_item)
             
-            # Convert enum to string for type
+            # Transaction type
             type_item = QTableWidgetItem(transaction.type.value)
             self.transactions_table.setItem(row_position, 1, type_item)
             
-            # Get category name
+            # Category
             category = self.session.query(Category).get(transaction.category_id)
             category_item = QTableWidgetItem(category.name if category else "Unknown")
             self.transactions_table.setItem(row_position, 2, category_item)
             
-            # Format amount with currency
+            # Amount with currency
             amount = float(transaction.amount)
-            amount_item = QTableWidgetItem(f"{transaction.currency} {amount:,.2f}")
+            amount_str = f"{transaction.currency} {abs(amount):,.2f}"
+            if amount < 0:
+                amount_str = f"{transaction.currency} -{abs(amount):,.2f}"
+            amount_item = QTableWidgetItem(amount_str)
             amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.transactions_table.setItem(row_position, 3, amount_item)
             
-            # Calculate running balance with currency
+            # Calculate running balance
             if running_balance is not None:
                 new_balance = running_balance
             else:
                 if row_position == 0:
                     new_balance = amount
                 else:
-                    # Extract numeric value from previous balance string
                     prev_balance_text = self.transactions_table.item(row_position-1, 4).text()
-                    # Split by spaces and get last part, then remove commas
-                    prev_balance = float(prev_balance_text.split()[-1].replace(',', ''))
+                    prev_balance = self.parse_amount_string(prev_balance_text)
                     new_balance = round(prev_balance + amount, 2)
-            
-            # Format balance with currency
+        
+            # Format balance
             balance_item = QTableWidgetItem(f"{transaction.currency} {new_balance:,.2f}")
             balance_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.transactions_table.setItem(row_position, 4, balance_item)
@@ -615,10 +616,10 @@ class AccountWindow(QMainWindow):
                 running_balance_account = 0.0
                 
                 for row in range(self.transactions_table.rowCount()):
-                    # Extract amount and currency from the amount column
+                    # Get amount from amount column
                     amount_text = self.transactions_table.item(row, 3).text()
                     curr = amount_text.split()[0]  # Get currency
-                    amount = float(amount_text.split()[1].replace(',', ''))  # Get numeric value
+                    amount = self.parse_amount_string(amount_text)  # Use parse method
                     
                     # Convert to SGD and account currency
                     if curr != 'SGD':
@@ -634,7 +635,7 @@ class AccountWindow(QMainWindow):
                     running_balance_sgd = round(running_balance_sgd + amount_sgd, 2)
                     running_balance_account = round(running_balance_account + amount_account, 2)
                     
-                    # Update balance column with both currencies
+                    # Update balance column
                     balance_text = f"SGD {running_balance_sgd:,.2f} / {self.account.currency} {running_balance_account:,.2f}"
                     balance_item = QTableWidgetItem(balance_text)
                     balance_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -718,7 +719,7 @@ class AccountWindow(QMainWindow):
             return round(float(amount), 2)
             
         try:
-            # Get conversion rate - Fix: Changed to_curr to to_currency in filter
+            # Get conversion rate
             rate = self.session.query(ExchangeRate)\
                 .filter_by(from_currency=from_curr, to_currency=to_curr)\
                 .first()
@@ -776,6 +777,24 @@ class AccountWindow(QMainWindow):
             index = self.currency_combo.findText(old_currency)
             if index >= 0:
                 self.currency_combo.setCurrentIndex(index)
+
+    def parse_amount_string(self, amount_str):
+        """Parse amount string to float, handling currency symbols and formatting"""
+        try:
+            # Split by spaces to separate currency and amount
+            parts = amount_str.strip().split()
+            
+            # Handle formats like "USD -123.45" or "USD 123.45"
+            if len(parts) >= 2:
+                # Join all parts except the currency code
+                amount_part = ''.join(parts[1:])
+                # Remove commas and convert to float
+                return float(amount_part.replace(',', ''))
+                
+            # Handle simple number strings
+            return float(amount_str.replace(',', ''))
+        except (ValueError, IndexError):
+            raise ValueError(f"Invalid amount format: {amount_str}")
 
 @contextmanager
 def transaction_scope(self):

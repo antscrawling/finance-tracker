@@ -2,6 +2,7 @@ import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from login import LoginWindow
 from models import init_db, Session, User, Account, Transaction, Category, TransactionType, ExchangeRate
+from sqlalchemy import UniqueConstraint
 
 def main():
     # Create QApplication first
@@ -37,3 +38,15 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+# These pairs are duplicated
+ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),  # First instance
+ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),  # Duplicate
+
+ExchangeRate(from_currency='USD', to_currency='EUR', rate=0.93),  # First instance
+ExchangeRate(from_currency='USD', to_currency='EUR', rate=0.93),  # Duplicate
+
+class ExchangeRate(Base):
+    __table_args__ = (
+        UniqueConstraint('from_currency', 'to_currency', name='unique_currency_pair'),
+    )

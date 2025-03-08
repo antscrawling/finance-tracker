@@ -144,24 +144,18 @@ def init_default_exchange_rates(session):
                 ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),
                 ExchangeRate(from_currency='USD', to_currency='GBP', rate=0.77),
                 ExchangeRate(from_currency='GBP', to_currency='USD', rate=1.29),
-                ExchangeRate(from_currency='USD', to_currency='JPY', rate=148.02),  # Added USD/JPY rate
-                ExchangeRate(from_currency='JPY', to_currency='USD', rate=1/148.02),  # Added JPY/USD rate
+                ExchangeRate(from_currency='USD', to_currency='JPY', rate=148.02),
+                ExchangeRate(from_currency='JPY', to_currency='USD', rate=1/148.02),
                 
                 # EUR pairs
                 ExchangeRate(from_currency='EUR', to_currency='GBP', rate=0.83),
                 ExchangeRate(from_currency='GBP', to_currency='EUR', rate=1.20),
                 ExchangeRate(from_currency='EUR', to_currency='JPY', rate=159.16),
                 ExchangeRate(from_currency='JPY', to_currency='EUR', rate=1/159.16),
-                ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),
-                ExchangeRate(from_currency='USD', to_currency='EUR', rate=0.93),
                 
                 # GBP pairs
                 ExchangeRate(from_currency='GBP', to_currency='JPY', rate=191.76),
-                ExchangeRate(from_currency='JPY', to_currency='GBP', rate=1/191.76),
-                ExchangeRate(from_currency='GBP', to_currency='USD', rate=1.29),
-                ExchangeRate(from_currency='USD', to_currency='GBP', rate=0.77),
-                ExchangeRate(from_currency='GBP', to_currency='EUR', rate=1.20),
-                ExchangeRate(from_currency='EUR', to_currency='GBP', rate=0.83),
+                ExchangeRate(from_currency='JPY', to_currency='GBP', rate=1/191.76)
             ]
             session.add_all(default_rates)
             session.commit()
