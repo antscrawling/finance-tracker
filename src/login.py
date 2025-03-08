@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QLineEdit, QPushButton, QLabel, QMessageBox)
 from PyQt6.QtCore import Qt
-import sys
-from biometric import BiometricAuth  # Changed to absolute import
+from models import Session, User
+from biometric import BiometricAuth
 
 class LoginWindow(QMainWindow):
     def __init__(self):
@@ -82,10 +82,11 @@ class LoginWindow(QMainWindow):
             QMessageBox.warning(self, "Error", "Please fill in all fields")
     
     def verify_credentials(self):
+        session = None
         try:
-            from models import User
             session = Session()
             user = session.query(User).filter_by(username=self.username.text()).first()
+            
             if not user:
                 QMessageBox.warning(
                     self, 
@@ -93,8 +94,10 @@ class LoginWindow(QMainWindow):
                     "User not found. Please sign up first."
                 )
                 return False
-            # ...existing credential verification code...
+            
+            # TODO: Add password verification here
             return True
+            
         except Exception as e:
             QMessageBox.critical(
                 self, 
@@ -102,8 +105,10 @@ class LoginWindow(QMainWindow):
                 f"Failed to verify credentials: {str(e)}"
             )
             return False
+            
         finally:
-            session.close()
+            if session is not None:
+                session.close()
     
     def reset_fields(self):
         self.username.clear()
