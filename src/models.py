@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Enum
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from contextlib import contextmanager
@@ -43,6 +43,7 @@ class Transaction(Base):
     type = Column(Enum(TransactionType), nullable=False)
     category_id = Column(Integer, ForeignKey('categories.id'), nullable=False)
     amount = Column(Float, nullable=False)
+    currency = Column(String(3), nullable=False, default='USD')  # Add currency field
     description = Column(String(200))
     created_at = Column(DateTime, default=datetime.now())
     account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False)
@@ -62,6 +63,19 @@ class Category(Base):
 
     def __repr__(self):
         return f"<Category(name='{self.name}', type='{self.type}')>"
+
+class ExchangeRate(Base):
+    __tablename__ = 'exchange_rates'
+    
+    id = Column(Integer, primary_key=True)
+    from_currency = Column(String(3), nullable=False)
+    to_currency = Column(String(3), nullable=False)
+    rate = Column(Float, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        UniqueConstraint('from_currency', 'to_currency', name='unique_currency_pair'),
+    )
 
 # Improve database configuration
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'finance_tracker.db')
@@ -83,10 +97,11 @@ def session_scope():
         session.close()
 
 def init_db():
-    """Initialize database and create default categories"""
+    """Initialize database and create default data"""
     Base.metadata.create_all(ENGINE)
     
-    with session_scope() as session:
+    session = Session()
+    try:
         # Create default categories if none exist
         if session.query(Category).count() == 0:
             default_categories = [
@@ -96,10 +111,41 @@ def init_db():
                 Category(name='Transport', type=TransactionType.EXPENSE),
                 Category(name='Utilities', type=TransactionType.EXPENSE),
                 Category(name='Entertainment', type=TransactionType.EXPENSE),
-                Category(name='Other Income', type=TransactionType.INCOME),
-                Category(name='Other Expense', type=TransactionType.EXPENSE),
             ]
             session.add_all(default_categories)
+            session.commit()
+            
+        # Initialize default exchange rates
+        init_default_exchange_rates(session)
+        
+    except Exception as e:
+        session.rollback()
+        raise e
+    finally:
+        session.close()
+
+def init_default_exchange_rates(session):
+    """Initialize default exchange rates if none exist"""
+    try:
+        if session.query(ExchangeRate).count() == 0:
+            default_rates = [
+                # SGD base rates
+                ExchangeRate(from_currency='USD', to_currency='SGD', rate=1.33),
+                ExchangeRate(from_currency='EUR', to_currency='SGD', rate=1.44),
+                ExchangeRate(from_currency='GBP', to_currency='SGD', rate=1.72),
+                ExchangeRate(from_currency='SGD', to_currency='JPY', rate=111.23),
+                
+                # Inverse rates
+                ExchangeRate(from_currency='SGD', to_currency='USD', rate=1/1.33),
+                ExchangeRate(from_currency='SGD', to_currency='EUR', rate=1/1.44),
+                ExchangeRate(from_currency='SGD', to_currency='GBP', rate=1/1.72),
+                ExchangeRate(from_currency='JPY', to_currency='SGD', rate=1/111.23)
+            ]
+            session.add_all(default_rates)
+            session.commit()
+    except Exception as e:
+        session.rollback()
+        raise ValueError(f"Failed to initialize exchange rates: {str(e)}")
 
 def get_session():
     """Get a new database session with proper error handling"""
