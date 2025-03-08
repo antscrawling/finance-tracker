@@ -43,7 +43,7 @@ class Transaction(Base):
     type = Column(Enum(TransactionType), nullable=False)
     category_id = Column(Integer, ForeignKey('categories.id'), nullable=False)
     amount = Column(Float, nullable=False)
-    currency = Column(String(3), nullable=False, default='USD')  # Add currency field
+    currency = Column(String(3), nullable=False, default='SGD')  # Add currency field
     description = Column(String(200))
     created_at = Column(DateTime, default=datetime.now())
     account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False)
@@ -131,15 +131,37 @@ def init_default_exchange_rates(session):
             default_rates = [
                 # SGD base rates
                 ExchangeRate(from_currency='USD', to_currency='SGD', rate=1.33),
-                ExchangeRate(from_currency='EUR', to_currency='SGD', rate=1.44),
-                ExchangeRate(from_currency='GBP', to_currency='SGD', rate=1.72),
-                ExchangeRate(from_currency='SGD', to_currency='JPY', rate=111.23),
-                
-                # Inverse rates
                 ExchangeRate(from_currency='SGD', to_currency='USD', rate=1/1.33),
+                ExchangeRate(from_currency='EUR', to_currency='SGD', rate=1.44),
                 ExchangeRate(from_currency='SGD', to_currency='EUR', rate=1/1.44),
+                ExchangeRate(from_currency='GBP', to_currency='SGD', rate=1.72),
                 ExchangeRate(from_currency='SGD', to_currency='GBP', rate=1/1.72),
-                ExchangeRate(from_currency='JPY', to_currency='SGD', rate=1/111.23)
+                ExchangeRate(from_currency='SGD', to_currency='JPY', rate=111.23),
+                ExchangeRate(from_currency='JPY', to_currency='SGD', rate=1/111.23),
+                
+                # USD pairs
+                ExchangeRate(from_currency='USD', to_currency='EUR', rate=0.93),
+                ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),
+                ExchangeRate(from_currency='USD', to_currency='GBP', rate=0.77),
+                ExchangeRate(from_currency='GBP', to_currency='USD', rate=1.29),
+                ExchangeRate(from_currency='USD', to_currency='JPY', rate=148.02),  # Added USD/JPY rate
+                ExchangeRate(from_currency='JPY', to_currency='USD', rate=1/148.02),  # Added JPY/USD rate
+                
+                # EUR pairs
+                ExchangeRate(from_currency='EUR', to_currency='GBP', rate=0.83),
+                ExchangeRate(from_currency='GBP', to_currency='EUR', rate=1.20),
+                ExchangeRate(from_currency='EUR', to_currency='JPY', rate=159.16),
+                ExchangeRate(from_currency='JPY', to_currency='EUR', rate=1/159.16),
+                ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),
+                ExchangeRate(from_currency='USD', to_currency='EUR', rate=0.93),
+                
+                # GBP pairs
+                ExchangeRate(from_currency='GBP', to_currency='JPY', rate=191.76),
+                ExchangeRate(from_currency='JPY', to_currency='GBP', rate=1/191.76),
+                ExchangeRate(from_currency='GBP', to_currency='USD', rate=1.29),
+                ExchangeRate(from_currency='USD', to_currency='GBP', rate=0.77),
+                ExchangeRate(from_currency='GBP', to_currency='EUR', rate=1.20),
+                ExchangeRate(from_currency='EUR', to_currency='GBP', rate=0.83),
             ]
             session.add_all(default_rates)
             session.commit()
