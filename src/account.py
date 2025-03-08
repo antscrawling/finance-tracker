@@ -10,13 +10,29 @@ import sys
 from datetime import datetime
 from decimal import Decimal
 import csv
-from models import Session, Transaction
+from models import Session, Transaction, TransactionType, Category, Account
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError, DatabaseError
+from contextlib import contextmanager
 
 class AccountWindow(QMainWindow):
     def __init__(self, username):
         super().__init__()
         self.username = username
         self.session = Session()
+        
+        # Create tabs before loading data
+        self.tab_widget = QTabWidget()
+        self.account_tab = QWidget()
+        self.reports_tab = QWidget()
+        self.settings_tab = QWidget()
+        
+        # Initialize transactions table
+        self.transactions_table = QTableWidget()
+        self.transactions_table.setColumnCount(5)
+        self.transactions_table.setHorizontalHeaderLabels([
+            "Date", "Type", "Category", "Amount", "Balance"
+        ])
+        self.transactions_table.horizontalHeader().setStretchLastSection(True)
         
         try:
             # Get user ID from database
@@ -27,12 +43,14 @@ class AccountWindow(QMainWindow):
                 raise ValueError("User not found. Please sign up first.")
                 
             self.user_id = user.id
-            self.load_transactions()
             self.setWindowTitle(f"Finance Tracker - {username}'s Account")
             self.setFixedSize(800, 600)
             
             # Initialize UI components
             self.init_ui()
+            
+            # Load transactions after UI is ready
+            self.load_transactions()
             
         except Exception as e:
             self.session.close()
@@ -41,15 +59,9 @@ class AccountWindow(QMainWindow):
 
     def init_ui(self):
         """Initialize all UI components"""
-        # Move UI initialization code here
-        self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
         
-        # Create tabs
-        self.account_tab = QWidget()
-        self.reports_tab = QWidget()
-        self.settings_tab = QWidget()
-        
+        # Add tabs
         self.tab_widget.addTab(self.account_tab, "Account")
         self.tab_widget.addTab(self.reports_tab, "Reports")
         self.tab_widget.addTab(self.settings_tab, "Settings")
@@ -115,11 +127,6 @@ class AccountWindow(QMainWindow):
         layout.addLayout(balance_layout)
         
         # Transactions table
-        self.transactions_table = QTableWidget()
-        self.transactions_table.setColumnCount(5)
-        self.transactions_table.setHorizontalHeaderLabels(
-            ["Date", "Type", "Category", "Amount", "Balance"])
-        self.transactions_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.transactions_table)
         
         # Add transaction section
@@ -210,15 +217,31 @@ class AccountWindow(QMainWindow):
     def add_transaction(self):
         try:
             amount = Decimal(self.amount_input.text())
-            if self.type_combo.currentText() == "Expense":
+            transaction_type = TransactionType.EXPENSE if self.type_combo.currentText() == "Expense" else TransactionType.INCOME
+            if transaction_type == TransactionType.EXPENSE:
                 amount = -amount
+                
+            # Get category ID
+            category = self.session.query(Category)\
+                .filter_by(name=self.category_combo.currentText())\
+                .first()
+            if not category:
+                raise ValueError("Invalid category")
+                
+            # Get user's default account
+            account = self.session.query(Account)\
+                .filter_by(user_id=self.user_id)\
+                .first()
+            if not account:
+                raise ValueError("No account found")
                 
             # Create new transaction
             transaction = Transaction(
                 user_id=self.user_id,
+                account_id=account.id,
                 date=self.date_edit.date().toPyDate(),
-                type=self.type_combo.currentText(),
-                category=self.category_combo.currentText(),
+                type=transaction_type,
+                category_id=category.id,
                 amount=float(amount),
                 description=""
             )
@@ -227,34 +250,71 @@ class AccountWindow(QMainWindow):
             self.session.add(transaction)
             self.session.commit()
             
+            # Update account balance
+            account.balance += float(amount)
+            self.session.commit()
+            
             # Add to table
             self.add_transaction_to_table(transaction)
+            
+            # Update balance display
+            self.balance = Decimal(str(account.balance))
+            self.balance_label.setText(
+                f"Current Balance: {self.currency_combo.currentText()} {self.balance:,.2f}")
             
             # Clear input
             self.amount_input.clear()
             
-        except ValueError:
-            QMessageBox.warning(self, "Error", "Please enter a valid amount")
+            # Update charts
+            self.update_charts()
+            
+        except ValueError as e:
+            QMessageBox.warning(self, "Error", str(e))
+        except Exception as e:
+            self.session.rollback()
+            QMessageBox.critical(self, "Database Error", f"Failed to save transaction: {str(e)}")
 
     def add_transaction_to_table(self, transaction):
-        row_position = self.transactions_table.rowCount()
-        self.transactions_table.insertRow(row_position)
-        
-        self.transactions_table.setItem(row_position, 0, 
-            QTableWidgetItem(transaction.date.strftime("%Y-%m-%d")))
-        self.transactions_table.setItem(row_position, 1, 
-            QTableWidgetItem(transaction.type))
-        self.transactions_table.setItem(row_position, 2, 
-            QTableWidgetItem(transaction.category))
-        self.transactions_table.setItem(row_position, 3, 
-            QTableWidgetItem(f"{transaction.amount:,.2f}"))
-        
-        # Calculate running balance
-        prev_balance = Decimal('0.00') if row_position == 0 else \
-            Decimal(self.transactions_table.item(row_position-1, 4).text().replace(',', ''))
-        new_balance = prev_balance + Decimal(str(transaction.amount))
-        self.transactions_table.setItem(row_position, 4, 
-            QTableWidgetItem(f"{new_balance:,.2f}"))
+        """Add a transaction to the table widget"""
+        try:
+            row_position = self.transactions_table.rowCount()
+            self.transactions_table.insertRow(row_position)
+            
+            # Format date
+            date_item = QTableWidgetItem(transaction.date.strftime("%Y-%m-%d"))
+            self.transactions_table.setItem(row_position, 0, date_item)
+            
+            # Convert enum to string for type
+            type_item = QTableWidgetItem(transaction.type.value)  # Use .value to get string
+            self.transactions_table.setItem(row_position, 1, type_item)
+            
+            # Get category name
+            category = self.session.query(Category).get(transaction.category_id)
+            category_item = QTableWidgetItem(category.name if category else "Unknown")
+            self.transactions_table.setItem(row_position, 2, category_item)
+            
+            # Format amount with currency
+            amount = Decimal(str(transaction.amount))
+            amount_item = QTableWidgetItem(f"{amount:,.2f}")
+            amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.transactions_table.setItem(row_position, 3, amount_item)
+            
+            # Calculate and format running balance
+            prev_balance = Decimal('0.00') if row_position == 0 else \
+                Decimal(self.transactions_table.item(row_position-1, 4).text().replace(',', ''))
+            new_balance = prev_balance + amount
+            balance_item = QTableWidgetItem(f"{new_balance:,.2f}")
+            balance_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.transactions_table.setItem(row_position, 4, balance_item)
+            
+            # Color code amounts
+            if amount < 0:
+                amount_item.setForeground(Qt.GlobalColor.red)
+            else:
+                amount_item.setForeground(Qt.GlobalColor.darkGreen)
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to add transaction to table: {str(e)}")
 
     def update_currency(self):
         self.balance_label.setText(
@@ -328,3 +388,13 @@ class AccountWindow(QMainWindow):
     def handle_error(self, title, message):
         """Utility method to display error messages"""
         QMessageBox.warning(self, title, message)
+
+@contextmanager
+def transaction_scope(self):
+    """Provide a transactional scope around a series of operations."""
+    try:
+        yield self.session
+        self.session.commit()
+    except Exception:
+        self.session.rollback()
+        raise

@@ -1,0 +1,4 @@
+-- database: ./finance_tracker.db
+
+SELECT * FROM transactions
+ORDER BY `id` ASC;

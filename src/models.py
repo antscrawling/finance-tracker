@@ -19,7 +19,7 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False)
     password = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now())
     accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
 
@@ -30,7 +30,7 @@ class Account(Base):
     name = Column(String(50), nullable=False)
     currency = Column(String(3), nullable=False)
     balance = Column(Float, default=0.0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now())
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     user = relationship("User", back_populates="accounts")
     transactions = relationship("Transaction", back_populates="account", cascade="all, delete-orphan")
@@ -39,12 +39,12 @@ class Transaction(Base):
     __tablename__ = 'transactions'
     
     id = Column(Integer, primary_key=True)
-    date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    date = Column(DateTime, nullable=False, default=datetime.now())
     type = Column(Enum(TransactionType), nullable=False)
     category_id = Column(Integer, ForeignKey('categories.id'), nullable=False)
     amount = Column(Float, nullable=False)
     description = Column(String(200))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now())
     account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     
@@ -58,7 +58,7 @@ class Category(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(50), nullable=False)
     type = Column(Enum(TransactionType), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now())
 
     def __repr__(self):
         return f"<Category(name='{self.name}', type='{self.type}')>"

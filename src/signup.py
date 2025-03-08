@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QLineEdit, QPushButton, QLabel, QMessageBox)
 from PyQt6.QtCore import Qt
+from models import User, Session, Account
+import hashlib
 
 class SignupWindow(QMainWindow):
     def __init__(self, parent=None):
@@ -67,14 +69,59 @@ class SignupWindow(QMainWindow):
         if self.password.text() != self.confirm_password.text():
             QMessageBox.warning(self, "Error", "Passwords do not match")
             return
+        
+        session = None
+        try:
+            session = Session()
             
-        # TODO: Add actual signup logic here
-        QMessageBox.information(self, "Success", "Account created successfully!")
-        self.close()
-        if self.parent_window:
-            self.parent_window.show()
-    
+            # Check if username already exists
+            if session.query(User).filter_by(username=self.username.text()).first():
+                QMessageBox.warning(self, "Error", "Username already exists")
+                return
+                
+            # Check if email already exists
+            if session.query(User).filter_by(email=self.email.text()).first():
+                QMessageBox.warning(self, "Error", "Email already registered")
+                return
+            
+            # Hash the password
+            hashed_password = hashlib.sha256(
+                self.password.text().encode()
+            ).hexdigest()
+            
+            # Create new user
+            new_user = User(
+                username=self.username.text(),
+                email=self.email.text(),
+                password=hashed_password
+            )
+            session.add(new_user)
+            
+            # Create default account for user
+            default_account = Account(
+                name="Default Account",
+                currency="USD",
+                user=new_user
+            )
+            session.add(default_account)
+            
+            session.commit()
+            QMessageBox.information(self, "Success", "Account created successfully!")
+            self.return_to_login()
+            
+        except Exception as e:
+            if session:
+                session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to create account: {str(e)}")
+        finally:
+            if session:
+                session.close()
+
     def handle_cancel(self):
-        self.close()
+        self.return_to_login()
+
+    def return_to_login(self):
+        """Return to login window"""
         if self.parent_window:
             self.parent_window.show()
+        self.close()
