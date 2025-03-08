@@ -619,28 +619,38 @@ class AccountWindow(QMainWindow):
                     # Get amount from amount column
                     amount_text = self.transactions_table.item(row, 3).text()
                     curr = amount_text.split()[0]  # Get currency
-                    amount = self.parse_amount_string(amount_text)  # Use parse method
                     
-                    # Convert to SGD and account currency
-                    if curr != 'SGD':
-                        amount_sgd = self.convert_amount(amount, curr, 'SGD')
-                    else:
-                        amount_sgd = amount
+                    try:
+                        # Parse amount using the improved method
+                        amount = self.parse_amount_string(amount_text)
                         
-                    if curr != self.account.currency:
-                        amount_account = self.convert_amount(amount, curr, self.account.currency)
-                    else:
-                        amount_account = amount
-                    
-                    running_balance_sgd = round(running_balance_sgd + amount_sgd, 2)
-                    running_balance_account = round(running_balance_account + amount_account, 2)
-                    
-                    # Update balance column
-                    balance_text = f"SGD {running_balance_sgd:,.2f} / {self.account.currency} {running_balance_account:,.2f}"
-                    balance_item = QTableWidgetItem(balance_text)
-                    balance_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                    self.transactions_table.setItem(row, 4, balance_item)
-                
+                        # Convert to SGD and account currency
+                        if curr != 'SGD':
+                            amount_sgd = self.convert_amount(amount, curr, 'SGD')
+                        else:
+                            amount_sgd = amount
+                            
+                        if curr != self.account.currency:
+                            amount_account = self.convert_amount(amount, curr, self.account.currency)
+                        else:
+                            amount_account = amount
+                        
+                        running_balance_sgd = round(running_balance_sgd + amount_sgd, 2)
+                        running_balance_account = round(running_balance_account + amount_account, 2)
+                        
+                        # Update balance column
+                        balance_text = f"SGD {running_balance_sgd:,.2f} / {self.account.currency} {running_balance_account:,.2f}"
+                        balance_item = QTableWidgetItem(balance_text)
+                        balance_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                        self.transactions_table.setItem(row, 4, balance_item)
+                        
+                    except ValueError as e:
+                        QMessageBox.warning(
+                            self, 
+                            "Conversion Error", 
+                            f"Error processing amount in row {row + 1}: {str(e)}"
+                        )
+                        
                 # Update charts
                 self.update_charts()
                 
@@ -781,20 +791,23 @@ class AccountWindow(QMainWindow):
     def parse_amount_string(self, amount_str):
         """Parse amount string to float, handling currency symbols and formatting"""
         try:
-            # Split by spaces to separate currency and amount
+            # Remove all non-numeric characters except decimal point and minus sign
+            # First, separate currency and amount
             parts = amount_str.strip().split()
-            
-            # Handle formats like "USD -123.45" or "USD 123.45"
-            if len(parts) >= 2:
-                # Join all parts except the currency code
-                amount_part = ''.join(parts[1:])
-                # Remove commas and convert to float
-                return float(amount_part.replace(',', ''))
+            if len(parts) < 2:
+                return float(amount_str.replace(',', ''))
                 
-            # Handle simple number strings
-            return float(amount_str.replace(',', ''))
-        except (ValueError, IndexError):
-            raise ValueError(f"Invalid amount format: {amount_str}")
+            # Get the amount part (everything after currency code)
+            amount_part = ' '.join(parts[1:])
+            # Remove commas
+            amount_part = amount_part.replace(',', '')
+            # Handle negative amounts with proper sign
+            if amount_part.startswith('-'):
+                return -float(amount_part[1:])
+            return float(amount_part)
+            
+        except (ValueError, IndexError) as e:
+            raise ValueError(f"Invalid amount format '{amount_str}': {str(e)}")
 
 @contextmanager
 def transaction_scope(self):
