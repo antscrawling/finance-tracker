@@ -389,6 +389,37 @@ class AccountWindow(QMainWindow):
         """Utility method to display error messages"""
         QMessageBox.warning(self, title, message)
 
+    def update_balances(self):
+        """Update running balances in the transactions table and total balance"""
+        try:
+            running_balance = Decimal('0.00')
+            
+            # Recalculate all balances
+            for row in range(self.transactions_table.rowCount()):
+                # Get amount from current row
+                amount = Decimal(self.transactions_table.item(row, 3).text().replace(',', ''))
+                running_balance += amount
+                
+                # Update balance column
+                balance_item = QTableWidgetItem(f"{running_balance:,.2f}")
+                balance_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self.transactions_table.setItem(row, 4, balance_item)
+            
+            # Update total balance display
+            self.balance = running_balance
+            self.balance_label.setText(
+                f"Current Balance: {self.currency_combo.currentText()} {self.balance:,.2f}")
+            
+            # Update charts
+            self.update_charts()
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "Error", 
+                f"Failed to update balances: {str(e)}"
+            )
+
 @contextmanager
 def transaction_scope(self):
     """Provide a transactional scope around a series of operations."""
