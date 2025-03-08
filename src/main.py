@@ -50,3 +50,25 @@ class ExchangeRate(Base):
     __table_args__ = (
         UniqueConstraint('from_currency', 'to_currency', name='unique_currency_pair'),
     )
+
+def parse_amount_string(self, amount_str):
+    """Parse amount string to float, handling currency symbols and formatting"""
+    try:
+        # Remove all non-numeric characters except decimal point and minus sign
+        clean_string = ''.join(c for c in amount_str if c.isdigit() or c in ['.', '-'])
+
+        # Handle negative numbers
+        if clean_string.startswith('-'):
+            sign = -1
+            clean_string = clean_string[1:]
+        else:
+            sign = 1
+
+        # Remove commas
+        clean_string = clean_string.replace(',', '')
+
+        # Convert to float
+        amount = float(clean_string) * sign
+        return amount
+    except (ValueError, AttributeError):
+        return 0.0
