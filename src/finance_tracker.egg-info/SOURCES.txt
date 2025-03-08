@@ -1,0 +1,7 @@
+README.md
+setup.py
+src/finance_tracker.egg-info/PKG-INFO
+src/finance_tracker.egg-info/SOURCES.txt
+src/finance_tracker.egg-info/dependency_links.txt
+src/finance_tracker.egg-info/requires.txt
+src/finance_tracker.egg-info/top_level.txt

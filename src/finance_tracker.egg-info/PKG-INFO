@@ -1,0 +1,12 @@
+Metadata-Version: 2.1
+Name: finance_tracker
+Version: 0.1
+Summary: A financial tracking desktop application
+Author: Your Name
+Requires-Python: >=3.8
+Requires-Dist: PyQt6>=6.4.0
+Requires-Dist: keyring>=23.0.0
+Requires-Dist: SQLAlchemy>=2.0.0
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: matplotlib>=3.7.0
+Requires-Dist: pyobjc-framework-LocalAuthentication>=9.2
