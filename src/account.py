@@ -13,14 +13,23 @@ import csv
 from models import Session, User, Account, Transaction, Category, TransactionType, ExchangeRate
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError, DatabaseError
 from contextlib import contextmanager
+from balance_inquiry import BalanceInquiry
 
 class AccountWindow(QMainWindow):
     def __init__(self, username):
         super().__init__()
         self.username = username
+        self.balance_inquiry = BalanceInquiry(username)
+        self.account = self.balance_inquiry.get_account()
+        if not self.account:
+            # Handle the case where the account is not found
+            QMessageBox.critical(self, "Account Error", "Account not found.")
+            self.close()
+            return
+
+        self.balance = self.balance_inquiry.get_balance()  # Get balance from balance_inquiry
         self.session = Session()
         self.balance_labels = {}
-        self.balance = 0.0  # Changed from Decimal to float
         
         try:
             # Get user data first
@@ -37,7 +46,7 @@ class AccountWindow(QMainWindow):
                 raise ValueError("No account found for user")
             
             # Set initial balance from account
-            self.balance = float(self.account.balance)
+            self.balance = self.balance_inquiry.get_balance()  # Get balance from balance_inquiry
             
             # Set window properties
             self.setWindowTitle(f"Finance Tracker - {username}'s Account")
@@ -92,7 +101,8 @@ class AccountWindow(QMainWindow):
         """Load account data and update UI"""
         try:
             # Set initial balance
-            self.balance = float(self.account.balance)
+            self.account = self.balance_inquiry.get_account()
+            self.balance = self.balance_inquiry.get_balance()  # Get balance from balance_inquiry
             
             # Set currency
             index = self.currency_combo.findText(self.account.currency)
@@ -369,17 +379,20 @@ class AccountWindow(QMainWindow):
             for transaction in transactions:
                 running_balance += float(transaction.amount)
                 self.add_transaction_to_table(transaction, running_balance)
+            
                 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load transactions: {str(e)}")
 
     def add_transaction(self):
         """Add a new transaction with float handling"""
+        amount = 0.00
         try:
             # Sanitize and validate amount input
             amount_str = self.amount_input.text().strip().replace(',', '')
             try:
-                amount = round(float(amount_str), 2)
+                # Validate and convert amount
+                amount = float(amount_str)
                 if amount <= 0:
                     raise ValueError("Amount must be greater than zero")
             except ValueError:
@@ -425,7 +438,8 @@ class AccountWindow(QMainWindow):
                 self.account.balance += converted_amount
                 
                 # Update UI
-                self.balance = self.account.balance
+                self.account = self.balance_inquiry.get_account()
+                self.balance = self.balance_inquiry.get_balance()  # Get balance from balance_inquiry
                 self.balance_label.setText(
                     f"Current Balance: {self.account.currency} {self.balance:,.2f}"
                 )
@@ -444,6 +458,7 @@ class AccountWindow(QMainWindow):
             QMessageBox.critical(self, "Database Error", f"Failed to save transaction: {str(e)}")
 
     def add_transaction_to_table(self, transaction, running_balance=None):
+        amount = 0.00
         try:
             row_position = self.transactions_table.rowCount()
             self.transactions_table.insertRow(row_position)
@@ -462,6 +477,7 @@ class AccountWindow(QMainWindow):
             self.transactions_table.setItem(row_position, 2, category_item)
             
             # Amount with currency
+            #if (transaction.amount).isdigit():
             amount = float(transaction.amount)
             amount_str = f"{transaction.currency} {abs(amount):,.2f}"
             if amount < 0:
@@ -477,10 +493,10 @@ class AccountWindow(QMainWindow):
                 if row_position == 0:
                     new_balance = amount
                 else:
-                    prev_balance_text = self.transactions_table.item(row_position-1, 4).text()
-                    prev_balance = self.parse_amount_string(prev_balance_text)
+                    # Get the balance from the database, not the screen
+                    prev_balance = self.balance_inquiry.get_balance()
                     new_balance = round(prev_balance + amount, 2)
-        
+
             # Format balance
             balance_item = QTableWidgetItem(f"{transaction.currency} {new_balance:,.2f}")
             balance_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -530,7 +546,7 @@ class AccountWindow(QMainWindow):
     
     def delete_transaction(self):
         current_row = self.transactions_table.currentRow()
-        if current_row < 0:
+        if (current_row < 0):
             QMessageBox.warning(self, "Error", "Please select a transaction to delete")
             return
             
@@ -600,8 +616,12 @@ class AccountWindow(QMainWindow):
         """Update balances in all currencies using float"""
         try:
             with transaction_scope(self):
-                # Get base balance
-                base_balance = float(self.account.balance)
+                # Get base balance from balance_inquiry
+                self.account = self.balance_inquiry.get_account()
+                if not self.account:
+                    QMessageBox.critical(self, "Account Error", "Account not found.")
+                    return
+                base_balance = self.balance_inquiry.get_balance()  # Get balance from balance_inquiry
                 
                 # Update balance in all currencies
                 for currency, label in self.balance_labels.items():
@@ -618,11 +638,11 @@ class AccountWindow(QMainWindow):
                 for row in range(self.transactions_table.rowCount()):
                     # Get amount from amount column
                     amount_text = self.transactions_table.item(row, 3).text()
-                    curr = amount_text.split()[0]  # Get currency
+                    curr,amount = amount_text.split() # Get currency
                     
                     try:
                         # Parse amount using the improved method
-                        amount = self.parse_amount_string(amount_text)
+                        #amount = self.parse_amount_string(amount_text)
                         
                         # Convert to SGD and account currency
                         if curr != 'SGD':
@@ -691,7 +711,8 @@ class AccountWindow(QMainWindow):
                 raise ValueError("From and To currencies must be different")
                 
             try:
-                rate = float(self.rate_input.text())
+                if (self.rate_input.text()).isdigit():
+                    rate = float(self.rate_input.text())
                 if rate <= 0:
                     raise ValueError("Rate must be positive")
             except ValueError:
@@ -723,7 +744,7 @@ class AccountWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to update exchange rate: {str(e)}")
 
-    def convert_amount(self, amount, from_curr, to_curr):
+    def convert_amount(self, amount:float, from_curr:str, to_curr:str):
         """Convert amount between currencies using float"""
         if from_curr == to_curr:
             return round(float(amount), 2)
@@ -751,7 +772,7 @@ class AccountWindow(QMainWindow):
             QMessageBox.critical(self, "Conversion Error", str(e))
             return round(float(amount), 2)
 
-    def handle_currency_change(self, new_currency):
+    def handle_currency_change(self, new_currency:str):
         """Handle currency change and update all amounts"""
         try:
             old_currency = self.account.currency
@@ -770,6 +791,8 @@ class AccountWindow(QMainWindow):
                 self.account.balance = self.balance
                 
                 # Update balance display
+                self.account = self.balance_inquiry.get_account()
+                self.balance = self.balance_inquiry.get_balance()  # Get balance from balance_inquiry
                 self.balance_label.setText(
                     f"Current Balance: {new_currency} {self.balance:,.2f}"
                 )
@@ -808,6 +831,11 @@ class AccountWindow(QMainWindow):
             
         except (ValueError, IndexError) as e:
             raise ValueError(f"Invalid amount format '{amount_str}': {str(e)}")
+
+    def closeEvent(self, event):
+        """Override close event to close the database session"""
+        self.balance_inquiry.close_session()
+        event.accept()
 
 @contextmanager
 def transaction_scope(self):

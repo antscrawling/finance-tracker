@@ -1,12 +1,13 @@
-PyQt6>=6.4.0
-SQLAlchemy>=2.0.0
-pandas>=2.0.0
-matplotlib>=3.7.0
-pyface>=8.0.0
-bcrypt>=4.0.0
-pillow>=9.0.0
-python-dotenv>=1.0.0
-pytest>=7.0.0
-keyring>=23.0.0
-auth>=0.5.2
-pyobjc-framework-LocalAuthentication>=11.0
+# Remove any old DMG of the same name, then create a new one
+test -f "dist/FinanceTracker.dmg" && rm "dist/FinanceTracker.dmg"
+create-dmg \
+  --volname "FinanceTracker" \
+  --volicon "app_icon.icns" \
+  --window-pos 200 120 \
+  --window-size 500 300 \
+  --icon-size 100 \
+  --icon "FinanceTracker.app" 150 130 \
+  --hide-extension "FinanceTracker.app" \
+  --app-drop-link 350 130 \
+  "dist/FinanceTracker.dmg" \
+  "dist/FinanceTracker.app"

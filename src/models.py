@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime
 import enum
 import os
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
 
 Base = declarative_base()
 
@@ -166,3 +167,124 @@ def init_default_exchange_rates(session):
 def get_session():
     """Get a new database session with proper error handling"""
     return Session()
+
+def update_balances(self):
+    """Update balances in all currencies using float"""
+    try:
+        with session_scope() as session:
+            # Get base balance from balance_inquiry
+            self.account = self.balance_inquiry.get_account()
+            if not self.account:
+                QMessageBox.critical(self, "Account Error", "Account not found.")
+                return
+            base_balance = self.balance_inquiry.get_balance()  # Get balance from balance_inquiry
+            
+            # Update balance in all currencies
+            for currency, label in self.balance_labels.items():
+                if currency == self.account.currency:
+                    balance = base_balance
+                else:
+                    balance = self.convert_amount(base_balance, self.account.currency, currency)
+                label.setText(f"{currency} {balance:,.2f}")
+            
+            # Update running balances in transaction table
+            running_balance_sgd = 0.0
+            running_balance_account = 0.0
+            
+            for row in range(self.transactions_table.rowCount()):
+                # Get amount from amount column
+                amount_text = self.transactions_table.item(row, 3).text()
+                #curr = amount_text.split()[0]  # Get currency
+                curr, amount = amount_text.split()  # Split currency and amount
+                try:
+                    ## Parse amount using the improved method
+                    #amount = self.parse_amount_string(amount_text)
+                    
+                    # Convert to SGD and account currency
+                    if curr != 'SGD':
+                        amount_sgd = self.convert_amount(amount, curr, 'SGD')
+                    else:
+                        amount_sgd = amount
+                        
+                    if curr != self.account.currency:
+                        amount_account = self.convert_amount(amount, curr, self.account.currency)
+                    else:
+                        amount_account = amount
+                    
+                    running_balance_sgd = round(running_balance_sgd + amount_sgd, 2)
+                    running_balance_account = round(running_balance_account + amount_account, 2)
+                    
+                    # Update balance column
+                    balance_text = f"SGD {running_balance_sgd:,.2f} / {self.account.currency} {running_balance_account:,.2f}"
+                    balance_item = QTableWidgetItem(balance_text)
+                    balance_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                    self.transactions_table.setItem(row, 4, balance_item)
+                    
+                except ValueError as e:
+                    QMessageBox.warning(
+                        self, 
+                        "Conversion Error", 
+                        f"Error processing amount in row {row + 1}: {str(e)}"
+                    )
+                    
+            # Update charts
+            self.update_charts()
+            
+    except Exception as e:
+        QMessageBox.critical(
+            self, 
+            "Error", 
+            f"Failed to update balances: {str(e)}"
+        )
+
+def add_transaction_to_table(self, transaction, running_balance=None):
+    try:
+        row_position = self.transactions_table.rowCount()
+        self.transactions_table.insertRow(row_position)
+        
+        # Format date
+        date_item = QTableWidgetItem(transaction.date.strftime("%Y-%m-%d"))
+        self.transactions_table.setItem(row_position, 0, date_item)
+        
+        # Transaction type
+        type_item = QTableWidgetItem(transaction.type.value)
+        self.transactions_table.setItem(row_position, 1, type_item)
+        
+        # Category
+        category = self.session.query(Category).get(transaction.category_id)
+        category_item = QTableWidgetItem(category.name if category else "Unknown")
+        self.transactions_table.setItem(row_position, 2, category_item)
+        
+        # Amount with currency
+        amount = float(transaction.amount)
+        amount_str = f"{transaction.currency} {abs(amount):,.2f}"
+        if amount < 0:
+            amount_str = f"{transaction.currency} -{abs(amount):,.2f}"
+        amount_item = QTableWidgetItem(amount_str)
+        amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.transactions_table.setItem(row_position, 3, amount_item)
+        
+        # Calculate running balance
+        if running_balance is not None:
+            new_balance = running_balance
+        else:
+            if row_position == 0:
+                new_balance = amount
+            else:
+                # Get the balance from the database, not the screen
+                prev_balance = self.balance_inquiry.get_balance()
+                new_balance = round(prev_balance + amount, 2)
+
+        # Format balance
+        balance_item = QTableWidgetItem(f"{transaction.currency} {new_balance:,.2f}")
+        balance_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.transactions_table.setItem(row_position, 4, balance_item)
+        
+        # Color code amounts
+        if amount < 0:
+            amount_item.setForeground(Qt.GlobalColor.red)
+        else:
+            amount_item.setForeground(Qt.GlobalColor.darkGreen)
+            
+    except Exception as e:
+        QMessageBox.critical(self, "Error", f"Failed to add transaction to table: {str(e)}")
