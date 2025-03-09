@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime
 import enum
 import os
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
+from PyQt6.QtWidgets import QMessageBox, QTableWidgetItem
 
 Base = declarative_base()
 

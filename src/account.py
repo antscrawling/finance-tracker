@@ -386,15 +386,14 @@ class AccountWindow(QMainWindow):
 
     def add_transaction(self):
         """Add a new transaction with float handling"""
-        amount = 0.00
         try:
             # Sanitize and validate amount input
             amount_str = self.amount_input.text().strip().replace(',', '')
             try:
                 # Validate and convert amount
-                amount = float(amount_str)
-                if amount <= 0:
-                    raise ValueError("Amount must be greater than zero")
+                amount = self.parse_amount_string(amount_str)
+                if amount == 0:
+                    raise ValueError("Please enter a valid amount (e.g., 123.45)")
             except ValueError:
                 raise ValueError("Please enter a valid amount (e.g., 123.45)")
                 
@@ -478,7 +477,8 @@ class AccountWindow(QMainWindow):
             
             # Amount with currency
             #if (transaction.amount).isdigit():
-            amount = float(transaction.amount)
+            #amount = float(transaction.amount)
+            amount = transaction.amount
             amount_str = f"{transaction.currency} {abs(amount):,.2f}"
             if amount < 0:
                 amount_str = f"{transaction.currency} -{abs(amount):,.2f}"
@@ -524,12 +524,23 @@ class AccountWindow(QMainWindow):
         
         for row in range(self.transactions_table.rowCount()):
             category = self.transactions_table.item(row, 2).text()
-            amount = float(self.transactions_table.item(row, 3).text().replace(',', ''))
+            amount_text = self.transactions_table.item(row, 3).text()
             
-            if amount < 0:
-                expenses[category] = expenses.get(category, 0) + abs(amount)
-            else:
-                incomes[category] = incomes.get(category, 0) + amount
+            try:
+                # Parse amount using the improved method
+                amount = self.parse_amount_string(amount_text)
+                
+                if amount < 0:
+                    expenses[category] = expenses.get(category, 0) + abs(amount)
+                else:
+                    incomes[category] = incomes.get(category, 0) + amount
+                    
+            except ValueError as e:
+                QMessageBox.warning(
+                    self, 
+                    "Conversion Error", 
+                    f"Error processing amount in row {row + 1}: {str(e)}"
+                )
         
         # Create pie chart
         if expenses:
@@ -546,7 +557,7 @@ class AccountWindow(QMainWindow):
     
     def delete_transaction(self):
         current_row = self.transactions_table.currentRow()
-        if (current_row < 0):
+        if current_row < 0:
             QMessageBox.warning(self, "Error", "Please select a transaction to delete")
             return
             
@@ -554,13 +565,14 @@ class AccountWindow(QMainWindow):
             with transaction_scope(self):
                 # Get transaction details
                 date_str = self.transactions_table.item(current_row, 0).text()
-                amount = float(self.transactions_table.item(current_row, 3).text().replace(',', ''))
+                amount_text = self.transactions_table.item(current_row, 3).text()
+                amount = self.parse_amount_string(amount_text)
                 
                 # Find transaction in database
                 transaction = self.session.query(Transaction)\
                     .filter(Transaction.user.has(username=self.username))\
-                    .filter(Transaction.date==datetime.strptime(date_str, "%Y-%m-%d"))\
-                    .filter(Transaction.amount==amount)\
+                    .filter(Transaction.date == datetime.strptime(date_str, "%Y-%m-%d"))\
+                    .filter(Transaction.amount == amount)\
                     .first()
                 
                 if not transaction:
@@ -638,7 +650,9 @@ class AccountWindow(QMainWindow):
                 for row in range(self.transactions_table.rowCount()):
                     # Get amount from amount column
                     amount_text = self.transactions_table.item(row, 3).text()
-                    curr,amount = amount_text.split() # Get currency
+                    curr,amt = amount_text.split() # Get currency
+                    amount = float(amt.replace(',', '')) # Get amount
+                    print(f'curr: {curr}, amount: {amount}')
                     
                     try:
                         # Parse amount using the improved method
@@ -815,22 +829,23 @@ class AccountWindow(QMainWindow):
         """Parse amount string to float, handling currency symbols and formatting"""
         try:
             # Remove all non-numeric characters except decimal point and minus sign
-            # First, separate currency and amount
-            parts = amount_str.strip().split()
-            if len(parts) < 2:
-                return float(amount_str.replace(',', ''))
-                
-            # Get the amount part (everything after currency code)
-            amount_part = ' '.join(parts[1:])
+            clean_string = ''.join(c for c in amount_str if c.isdigit() or c in ['.', '-'])
+
+            # Handle negative numbers
+            if clean_string.startswith('-'):
+                sign = -1
+                clean_string = clean_string[1:]
+            else:
+                sign = 1
+
             # Remove commas
-            amount_part = amount_part.replace(',', '')
-            # Handle negative amounts with proper sign
-            if amount_part.startswith('-'):
-                return -float(amount_part[1:])
-            return float(amount_part)
-            
-        except (ValueError, IndexError) as e:
-            raise ValueError(f"Invalid amount format '{amount_str}': {str(e)}")
+            clean_string = clean_string.replace(',', '')
+
+            # Convert to float
+            amount = float(clean_string) * sign
+            return amount
+        except (ValueError, AttributeError):
+            return 0.0
 
     def closeEvent(self, event):
         """Override close event to close the database session"""

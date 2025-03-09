@@ -1,7 +1,7 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from login import LoginWindow
-from models import init_db, Session, User, Account, Transaction, Category, TransactionType, ExchangeRate
+from models import init_db, Session, User, Account, Transaction, Category, TransactionType, ExchangeRate, Base
 from sqlalchemy import UniqueConstraint
 
 def main():
@@ -39,36 +39,36 @@ def main():
 if __name__ == "__main__":
     sys.exit(main())
 
-# These pairs are duplicated
-ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),  # First instance
-ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),  # Duplicate
-
-ExchangeRate(from_currency='USD', to_currency='EUR', rate=0.93),  # First instance
-ExchangeRate(from_currency='USD', to_currency='EUR', rate=0.93),  # Duplicate
-
-class ExchangeRate(Base):
-    __table_args__ = (
-        UniqueConstraint('from_currency', 'to_currency', name='unique_currency_pair'),
-    )
-
-def parse_amount_string(self, amount_str):
-    """Parse amount string to float, handling currency symbols and formatting"""
-    try:
-        # Remove all non-numeric characters except decimal point and minus sign
-        clean_string = ''.join(c for c in amount_str if c.isdigit() or c in ['.', '-'])
-
-        # Handle negative numbers
-        if clean_string.startswith('-'):
-            sign = -1
-            clean_string = clean_string[1:]
-        else:
-            sign = 1
-
-        # Remove commas
-        clean_string = clean_string.replace(',', '')
-
-        # Convert to float
-        amount = float(clean_string) * sign
-        return amount
-    except (ValueError, AttributeError):
-        return 0.0
+## These pairs are duplicated
+#ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),  # First instance
+#ExchangeRate(from_currency='EUR', to_currency='USD', rate=1.08),  # Duplicate
+#
+#ExchangeRate(from_currency='USD', to_currency='EUR', rate=0.93),  # First instance
+#ExchangeRate(from_currency='USD', to_currency='EUR', rate=0.93),  # Duplicate
+#
+#class ExchangeRate(Base):
+#    __table_args__ = (
+#        UniqueConstraint('from_currency', 'to_currency', name='unique_currency_pair'),
+#    )
+#
+#def parse_amount_string(self, amount_str):
+#    """Parse amount string to float, handling currency symbols and formatting"""
+#    try:
+#        # Remove all non-numeric characters except decimal point and minus sign
+#        clean_string = ''.join(c for c in amount_str if c.isdigit() or c in ['.', '-'])
+#
+#        # Handle negative numbers
+#        if clean_string.startswith('-'):
+#            sign = -1
+#            clean_string = clean_string[1:]
+#        else:
+#            sign = 1
+#
+#        # Remove commas
+#        clean_string = clean_string.replace(',', '')
+#
+#        # Convert to float
+#        amount = float(clean_string) * sign
+#        return amount
+#    except (ValueError, AttributeError):
+#        return 0.0
